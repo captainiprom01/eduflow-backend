@@ -64,7 +64,7 @@ router.post('/signup', async (req, res) => {
     }
     const hash = await bcrypt.hash(String(password), 10);
     const result = await pool.query(
-      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email',
+      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, (password_hash IS NOT NULL) AS has_password',
       [String(name).trim(), normalizedEmail, hash]
     );
     const user = result.rows[0];
@@ -88,7 +88,7 @@ router.post('/login', async (req, res) => {
     }
     const match = await bcrypt.compare(String(password), user.password_hash);
     if (!match) return res.status(401).json({ error: 'Invalid email or password.' });
-    res.json({ token: signToken(user.id), user: { id: user.id, name: user.name, email: user.email } });
+    res.json({ token: signToken(user.id), user: { id: user.id, name: user.name, email: user.email, has_password: true } });
   } catch (e) {
     console.error('login error', e);
     res.status(500).json({ error: 'Could not log in.' });
@@ -109,20 +109,20 @@ router.post('/google', async (req, res) => {
     const googleId = payload.sub;
     const name = payload.name || normalizedEmail.split('@')[0];
 
-    let result = await pool.query('SELECT id, name, email FROM users WHERE google_id = $1', [googleId]);
+    let result = await pool.query('SELECT id, name, email, (password_hash IS NOT NULL) AS has_password FROM users WHERE google_id = $1', [googleId]);
     let user = result.rows[0];
 
     if (!user) {
       // No account linked to this Google ID yet — check if the email is
       // already registered (e.g. they originally signed up with a
       // password) and link it, otherwise create a brand new account.
-      result = await pool.query('SELECT id, name, email FROM users WHERE email = $1', [normalizedEmail]);
+      result = await pool.query('SELECT id, name, email, (password_hash IS NOT NULL) AS has_password FROM users WHERE email = $1', [normalizedEmail]);
       user = result.rows[0];
       if (user) {
         await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [googleId, user.id]);
       } else {
         const inserted = await pool.query(
-          'INSERT INTO users (name, email, google_id) VALUES ($1, $2, $3) RETURNING id, name, email',
+          'INSERT INTO users (name, email, google_id) VALUES ($1, $2, $3) RETURNING id, name, email, (password_hash IS NOT NULL) AS has_password',
           [name, normalizedEmail, googleId]
         );
         user = inserted.rows[0];
@@ -197,7 +197,7 @@ router.post('/reset-password', async (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
-  const result = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [req.userId]);
+  const result = await pool.query('SELECT id, name, email, (password_hash IS NOT NULL) AS has_password FROM users WHERE id = $1', [req.userId]);
   if (!result.rows.length) return res.status(404).json({ error: 'User not found.' });
   res.json({ user: result.rows[0] });
 });

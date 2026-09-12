@@ -1,17 +1,46 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { sendEmail } = require('../lib/email');
 
 const router = express.Router();
 router.use(requireAuth);
+
+const USER_FIELDS = 'id, name, email, (password_hash IS NOT NULL) AS has_password, email_verified';
+
+function hashToken(rawToken) {
+  return crypto.createHash('sha256').update(rawToken).digest('hex');
+}
+
+async function sendVerificationEmail(userId, toEmail) {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await pool.query('UPDATE users SET verify_token_hash = $1, verify_token_expires = $2 WHERE id = $3', [
+    hashToken(rawToken),
+    expires,
+    userId,
+  ]);
+  const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  const verifyLink = `${frontendUrl}?verifyToken=${rawToken}`;
+  await sendEmail({
+    to: toEmail,
+    subject: 'Verify your new EduFlow email',
+    html: `
+      <p>You changed the email on your EduFlow account. Please confirm this new address.</p>
+      <p><a href="${verifyLink}">Click here to verify your email</a>. This link expires in 24 hours.</p>
+      <p>If you didn't make this change, please secure your account immediately.</p>
+    `,
+  });
+}
 
 router.patch('/profile', async (req, res) => {
   try {
     const { name } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Name is required.' });
     const result = await pool.query(
-      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, (password_hash IS NOT NULL) AS has_password',
+      `UPDATE users SET name = $1 WHERE id = $2 RETURNING ${USER_FIELDS}`,
       [String(name).trim(), req.userId]
     );
     res.json({ user: result.rows[0] });
@@ -27,21 +56,29 @@ router.patch('/email', async (req, res) => {
     if (!newEmail) return res.status(400).json({ error: 'A new email is required.' });
     const normalizedEmail = String(newEmail).trim().toLowerCase();
 
-    const current = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.userId]);
-    const passwordHash = current.rows[0].password_hash;
+    const current = await pool.query('SELECT email, password_hash FROM users WHERE id = $1', [req.userId]);
+    const { email: oldEmail, password_hash: passwordHash } = current.rows[0];
     if (passwordHash) {
       if (!currentPassword) return res.status(400).json({ error: 'Enter your current password to change your email.' });
       const match = await bcrypt.compare(String(currentPassword), passwordHash);
       if (!match) return res.status(401).json({ error: 'Current password is incorrect.' });
     }
 
+    if (normalizedEmail === oldEmail) {
+      const unchanged = await pool.query(`SELECT ${USER_FIELDS} FROM users WHERE id = $1`, [req.userId]);
+      return res.json({ user: unchanged.rows[0] });
+    }
+
     const taken = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [normalizedEmail, req.userId]);
     if (taken.rows.length) return res.status(409).json({ error: 'That email is already in use by another account.' });
 
+    // A changed email hasn't been proven to belong to this person yet —
+    // mark it unverified and send a fresh verification link to it.
     const result = await pool.query(
-      'UPDATE users SET email = $1 WHERE id = $2 RETURNING id, name, email, (password_hash IS NOT NULL) AS has_password',
+      `UPDATE users SET email = $1, email_verified = false WHERE id = $2 RETURNING ${USER_FIELDS}`,
       [normalizedEmail, req.userId]
     );
+    sendVerificationEmail(req.userId, normalizedEmail).catch((e) => console.error('verification email failed', e));
     res.json({ user: result.rows[0] });
   } catch (e) {
     console.error('update email error', e);

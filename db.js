@@ -23,16 +23,28 @@ const SCHEMA = `
     google_id TEXT UNIQUE,
     reset_token_hash TEXT,
     reset_token_expires TIMESTAMPTZ,
+    email_verified BOOLEAN NOT NULL DEFAULT false,
+    verify_token_hash TEXT,
+    verify_token_expires TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now()
   );
 
   -- These ALTERs are safe to re-run: they only apply if the column/constraint
   -- doesn't already exist. Needed because the users table above may already
-  -- exist from before Google sign-in / password reset were added.
+  -- exist from before Google sign-in / password reset / email verification
+  -- were added.
   ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash TEXT;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_hash TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expires TIMESTAMPTZ;
+
+  -- Accounts that already existed before this column was added have
+  -- already proven their email works (they got password-reset emails,
+  -- etc.) — don't suddenly nag them to re-verify.
+  UPDATE users SET email_verified = true WHERE created_at < now() - interval '1 minute';
 
   CREATE TABLE IF NOT EXISTS courses (
     id SERIAL PRIMARY KEY,

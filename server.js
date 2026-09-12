@@ -4,6 +4,7 @@ const cors = require('cors');
 const { initDb } = require('./db');
 
 const authRoutes = require('./routes/auth');
+const accountRoutes = require('./routes/account');
 const courseRoutes = require('./routes/courses');
 const semesterRoutes = require('./routes/semesters');
 const cgpaRoutes = require('./routes/cgpa');
@@ -32,6 +33,7 @@ app.use(express.json());
 app.get('/', (req, res) => res.json({ ok: true, service: 'EduFlow API' }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/account', accountRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/semesters', semesterRoutes);
 app.use('/api/cgpa', cgpaRoutes);

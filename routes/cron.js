@@ -62,6 +62,7 @@ router.post('/send-reminders', requireCronSecret, async (req, res) => {
       emailsSent += 1;
     }
 
+    console.log(`[reminders] ran for ${dueDate}: ${byUser.size} user(s), ${emailsSent} email(s) sent`);
     res.json({ dueDate, usersWithReminders: byUser.size, emailsSent });
   } catch (e) {
     console.error('send-reminders error', e);

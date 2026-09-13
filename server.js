@@ -13,6 +13,7 @@ const assignmentRoutes = require('./routes/assignments');
 const taskRoutes = require('./routes/tasks');
 const progressRoutes = require('./routes/progress');
 const cronRoutes = require('./routes/cron');
+const assistantRoutes = require('./routes/assistant');
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET environment variable. Set it in .env before starting the server.');
@@ -43,6 +44,7 @@ app.use('/api/assignments', assignmentRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/assistant', assistantRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });

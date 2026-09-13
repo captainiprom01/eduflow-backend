@@ -2,12 +2,29 @@ name: Send assignment reminders
 
 on:
   schedule:
+    # Run daily at 6:00 AM UTC
     - cron: "0 6 * * *"
   workflow_dispatch:
 
 jobs:
   trigger-reminders:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Call the reminders endpoint
-        run: curl --fail --silent --show-error -X POST "${{ vars.BACKEND_URL }}/api/cron/send-reminders?key=${{ secrets.CRON_SECRET }}"
+        run: |
+          response=$(curl -w "\n%{http_code}" --silent -X POST "${{ vars.BACKEND_URL }}/api/cron/send-reminders?key=${{ secrets.CRON_SECRET }}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          echo "Response Code: $http_code"
+          echo "Response Body: $body"
+          
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Failed to send reminders"
+            exit 1
+          fi
+      
+      - name: Notify on failure
+        if: failure()
+        run: echo "⚠️ Reminder workflow failed. Check logs at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

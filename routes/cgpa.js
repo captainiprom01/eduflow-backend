@@ -60,10 +60,15 @@ router.get('/', async (req, res) => {
     gpa: s.units ? Number((s.points / s.units).toFixed(2)) : 0,
   }));
 
+  const entriesWithPoints = entries.map((entry) => ({
+    ...entry,
+    points: GRADE_POINTS[entry.grade] * entry.units,
+  }));
+
   const cumulativeGpa = cumulativeUnits ? Number((cumulativePoints / cumulativeUnits).toFixed(2)) : 0;
 
   res.json({
-    entries,
+    entries: entriesWithPoints,
     semesters,
     cumulative: {
       gpa: cumulativeGpa,

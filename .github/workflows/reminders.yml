@@ -1,1 +1,17 @@
+name: Send assignment reminders
 
+on:
+  schedule:
+    # Runs at 06:00 UTC every day = 07:00 in Nigeria (UTC+1).
+    # Adjust the hour here if you want reminders at a different local time.
+    - cron: '0 6 * * *'
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab, for testing
+
+jobs:
+  trigger-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the reminders endpoint
+        run: |
+          curl --fail --silent --show-error -X POST \
+            "${{ vars.BACKEND_URL }}/api/cron/send-reminders?key=${{ secrets.CRON_SECRET }}"

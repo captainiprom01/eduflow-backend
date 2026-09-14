@@ -14,6 +14,7 @@ const taskRoutes = require('./routes/tasks');
 const progressRoutes = require('./routes/progress');
 const cronRoutes = require('./routes/cron');
 const assistantRoutes = require('./routes/assistant');
+const { generalLimiter } = require('./middleware/rateLimit');
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET environment variable. Set it in .env before starting the server.');
@@ -31,6 +32,7 @@ const corsOrigin = process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*'
   : true;
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
+app.use(generalLimiter);
 
 app.get('/', (req, res) => res.json({ ok: true, service: 'EduFlow API' }));
 

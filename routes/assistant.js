@@ -14,6 +14,15 @@ function classify(gpa) {
   return 'Pass';
 }
 
+// Only these may ever be sent to Groq — never forward whatever string the
+// client happens to send, since that field goes straight into an API call.
+const ALLOWED_MODELS = {
+  'llama-3.3-70b-versatile': 'Llama 3.3 70B',
+  'openai/gpt-oss-120b': 'GPT-OSS 120B',
+  'llama-3.1-8b-instant': 'Llama 3.1 8B (fastest)',
+};
+const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+
 // Pulled fresh from the database on every message rather than trusting
 // whatever the frontend has cached, so the AI is always reasoning over
 // the student's actual current data.
@@ -56,9 +65,14 @@ async function buildContext(userId) {
   };
 }
 
+router.get('/models', (req, res) => {
+  const models = Object.entries(ALLOWED_MODELS).map(([id, label]) => ({ id, label }));
+  res.json({ models, default: DEFAULT_MODEL, aiConfigured: !!process.env.GROQ_API_KEY });
+});
+
 router.post('/chat', async (req, res) => {
   try {
-    const { message } = req.body || {};
+    const { message, model, history } = req.body || {};
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Message is required.' });
     }
@@ -69,16 +83,28 @@ router.post('/chat', async (req, res) => {
       return res.json({ reply: null, aiConfigured: false });
     }
 
+    const selectedModel = Object.prototype.hasOwnProperty.call(ALLOWED_MODELS, model) ? model : DEFAULT_MODEL;
     const context = await buildContext(req.userId);
     const systemPrompt = [
       'You are the study assistant built into EduFlow, a student campus dashboard app.',
-      'Answer briefly and helpfully — 2 to 4 sentences unless the student explicitly asks for a list or more detail.',
-      "You've been given the student's real, current data below. Use it to answer questions about their CGPA, deadlines, timetable, or study progress. Never invent data that isn't present here — if something isn't in the data, say you don't have that information.",
-      'If the student asks something unrelated to their studies, you can still help, but keep the same brief, friendly tone.',
+      'You are a genuinely capable academic assistant, similar to a general AI chat assistant — you can explain concepts, work through problems, help with essays or study material, discuss any academic subject, and hold a real back-and-forth conversation. You are not limited to only talking about the dashboard.',
+      'Answer at whatever length actually suits the question — short and direct for quick facts, longer and structured (with steps or a list) when a real explanation is needed. Do not artificially shorten a good answer.',
+      "You've also been given the student's real, current EduFlow data below (courses, CGPA, deadlines, timetable). Use it when it's relevant to what they're asking — for example if they ask about their workload, deadlines, or CGPA. Never invent data that isn't present here; if something isn't in the data, say you don't have that information rather than guessing.",
       '',
-      "Student's current data:",
+      "Student's current EduFlow data:",
       JSON.stringify(context, null, 2),
     ].join('\n');
+
+    // Keep a little conversation memory so follow-up questions work
+    // naturally, same as a normal chat assistant. Trust nothing about
+    // shape/content from the client beyond role+text; cap how much we
+    // forward so one request can't balloon token usage.
+    const trimmedHistory = Array.isArray(history)
+      ? history
+          .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string')
+          .slice(-10)
+          .map((m) => ({ role: m.role, content: m.text.slice(0, 2000) }))
+      : [];
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -87,13 +113,14 @@ router.post('/chat', async (req, res) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: selectedModel,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: String(message).slice(0, 2000) },
+          ...trimmedHistory,
+          { role: 'user', content: String(message).slice(0, 4000) },
         ],
-        max_tokens: 300,
-        temperature: 0.4,
+        max_tokens: 1024,
+        temperature: 0.5,
       }),
     });
 
@@ -105,7 +132,7 @@ router.post('/chat', async (req, res) => {
 
     const data = await groqResponse.json();
     const reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    res.json({ reply: reply || null, aiConfigured: true });
+    res.json({ reply: reply || null, aiConfigured: true, model: selectedModel });
   } catch (e) {
     console.error('assistant chat error', e);
     res.status(500).json({ error: 'Could not reach the assistant.' });

@@ -40,6 +40,17 @@ const SCHEMA = `
   ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_hash TEXT;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expires TIMESTAMPTZ;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS longest_streak INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE;
+
+  CREATE TABLE IF NOT EXISTS achievements_earned (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    achievement_key TEXT NOT NULL,
+    earned_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id, achievement_key)
+  );
 
   -- Accounts that already existed before this column was added have
   -- already proven their email works (they got password-reset emails,

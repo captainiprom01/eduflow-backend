@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { assistantLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -72,7 +73,7 @@ router.get('/models', (req, res) => {
   res.json({ models, default: DEFAULT_MODEL, aiConfigured: !!process.env.GROQ_API_KEY });
 });
 
-router.post('/chat', async (req, res) => {
+router.post('/chat', assistantLimiter, async (req, res) => {
   try {
     const { message, model, history } = req.body || {};
     if (!message || !String(message).trim()) {

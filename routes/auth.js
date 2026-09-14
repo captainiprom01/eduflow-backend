@@ -6,6 +6,7 @@ const { OAuth2Client } = require('google-auth-library');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { sendEmail } = require('../lib/email');
+const { authLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 const googleClient = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID) : null;
@@ -45,7 +46,7 @@ async function sendVerificationEmail(userId, toEmail) {
   });
 }
 
-router.post('/signup', async (req, res) => {
+router.post('/signup', authLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
     if (!name || !email || !password) {
@@ -73,7 +74,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
@@ -96,7 +97,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.post('/google', async (req, res) => {
+router.post('/google', authLimiter, async (req, res) => {
   try {
     if (!googleClient) {
       return res.status(501).json({ error: 'Google sign-in is not configured on this server yet.' });
@@ -175,7 +176,7 @@ router.post('/resend-verification', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authLimiter, async (req, res) => {
   const genericMessage = { message: "If that email is registered, we've sent a reset link to it." };
   try {
     const { email } = req.body || {};
@@ -217,7 +218,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', authLimiter, async (req, res) => {
   try {
     const { token, password } = req.body || {};
     if (!token || !password) return res.status(400).json({ error: 'Reset token and new password are required.' });

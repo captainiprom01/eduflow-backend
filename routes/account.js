@@ -113,6 +113,50 @@ router.patch('/password', async (req, res) => {
   }
 });
 
+router.get('/export', async (req, res) => {
+  try {
+    const userId = req.userId;
+    const [userR, coursesR, semestersR, cgpaR, timetableR, assignmentsR, tasksR] = await Promise.all([
+      pool.query('SELECT name, email, created_at FROM users WHERE id = $1', [userId]),
+      pool.query('SELECT id, name, code, units, instructor, created_at FROM courses WHERE user_id = $1', [userId]),
+      pool.query('SELECT id, name, created_at FROM semesters WHERE user_id = $1', [userId]),
+      pool.query(
+        `SELECT ce.grade, ce.created_at, s.name AS semester_name, c.name AS course_name, c.units
+         FROM cgpa_entries ce
+         JOIN semesters s ON s.id = ce.semester_id
+         JOIN courses c ON c.id = ce.course_id
+         WHERE ce.user_id = $1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT t.day, t.start_time, t.end_time, t.location, c.name AS course_name
+         FROM timetable t JOIN courses c ON c.id = t.course_id WHERE t.user_id = $1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT a.title, a.due_date, a.priority, a.done, c.name AS course_name
+         FROM assignments a LEFT JOIN courses c ON c.id = a.course_id WHERE a.user_id = $1`,
+        [userId]
+      ),
+      pool.query('SELECT text, done, created_at FROM study_tasks WHERE user_id = $1', [userId]),
+    ]);
+
+    res.json({
+      exportedAt: new Date().toISOString(),
+      account: userR.rows[0],
+      courses: coursesR.rows,
+      semesters: semestersR.rows,
+      grades: cgpaR.rows,
+      timetable: timetableR.rows,
+      assignments: assignmentsR.rows,
+      studyTasks: tasksR.rows,
+    });
+  } catch (e) {
+    console.error('export data error', e);
+    res.status(500).json({ error: 'Could not export your data.' });
+  }
+});
+
 router.delete('/', async (req, res) => {
   try {
     const { currentPassword } = req.body || {};

@@ -16,12 +16,14 @@ function classify(gpa) {
 
 // Only these may ever be sent to Groq — never forward whatever string the
 // client happens to send, since that field goes straight into an API call.
+// Picked from Groq's "Allowed Models" default list so this works out of
+// the box on a fresh Groq project without needing manual permission edits.
 const ALLOWED_MODELS = {
-  'llama-3.3-70b-versatile': 'Llama 3.3 70B',
-  'openai/gpt-oss-120b': 'GPT-OSS 120B',
-  'llama-3.1-8b-instant': 'Llama 3.1 8B (fastest)',
+  'openai/gpt-oss-120b': 'GPT-OSS 120B (most capable)',
+  'openai/gpt-oss-20b': 'GPT-OSS 20B (fastest)',
+  'qwen/qwen3.8-27b': 'Qwen3 27B',
 };
-const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
 // Pulled fresh from the database on every message rather than trusting
 // whatever the frontend has cached, so the AI is always reasoning over

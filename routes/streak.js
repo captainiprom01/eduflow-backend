@@ -1,9 +1,15 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 router.use(requireAuth);
+
+const streakLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each authenticated client/IP to 100 requests per window
+});
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -47,7 +53,7 @@ async function checkInStreak(userId) {
   return { currentStreak, longestStreak };
 }
 
-router.get('/', async (req, res) => {
+router.get('/', streakLimiter, async (req, res) => {
   try {
     const { currentStreak, longestStreak } = await checkInStreak(req.userId);
 

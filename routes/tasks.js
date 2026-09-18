@@ -29,7 +29,7 @@ router.patch('/:id', async (req, res) => {
   try {
     const { done } = req.body || {};
     const result = await pool.query(
-      'UPDATE study_tasks SET done = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
+      'UPDATE study_tasks SET done = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING *',
       [!!done, req.params.id, req.userId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Task not found.' });

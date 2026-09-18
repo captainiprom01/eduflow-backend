@@ -1,0 +1,30 @@
+name: Send weekly recap
+
+on:
+  schedule:
+    # Run every Sunday at 5:00 PM UTC = 6:00 PM in Nigeria (UTC+1)
+    - cron: "0 17 * * 0"
+  workflow_dispatch:
+
+jobs:
+  trigger-weekly-recap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the weekly recap endpoint
+        run: |
+          response=$(curl -w "\n%{http_code}" --silent -X POST "${{ vars.BACKEND_URL }}/api/cron/send-weekly-recap?key=${{ secrets.CRON_SECRET }}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          echo "Response Code: $http_code"
+          echo "Response Body: $body"
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Failed to send weekly recap"
+            exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "⚠️ Weekly recap workflow failed. Check logs at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

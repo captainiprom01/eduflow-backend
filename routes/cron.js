@@ -23,6 +23,11 @@ function tomorrowDateString() {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10); // 'YYYY-MM-DD'
 }
+function sevenDaysAgoIso() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 7);
+  return d.toISOString();
+}
 
 router.post('/send-reminders', requireCronSecret, async (req, res) => {
   try {
@@ -67,6 +72,57 @@ router.post('/send-reminders', requireCronSecret, async (req, res) => {
   } catch (e) {
     console.error('send-reminders error', e);
     res.status(500).json({ error: 'Could not send reminders.' });
+  }
+});
+
+router.post('/send-weekly-recap', requireCronSecret, async (req, res) => {
+  try {
+    const since = sevenDaysAgoIso();
+    const [usersR, completedAsgR, completedTaskR, newGradesR] = await Promise.all([
+      pool.query('SELECT id, name, email, current_streak FROM users'),
+      pool.query('SELECT user_id, COUNT(*)::int AS n FROM assignments WHERE done = true AND updated_at >= $1 GROUP BY user_id', [since]),
+      pool.query('SELECT user_id, COUNT(*)::int AS n FROM study_tasks WHERE done = true AND updated_at >= $1 GROUP BY user_id', [since]),
+      pool.query('SELECT user_id, COUNT(*)::int AS n FROM cgpa_entries WHERE created_at >= $1 GROUP BY user_id', [since]),
+    ]);
+
+    const asgMap = new Map(completedAsgR.rows.map((r) => [r.user_id, r.n]));
+    const taskMap = new Map(completedTaskR.rows.map((r) => [r.user_id, r.n]));
+    const gradeMap = new Map(newGradesR.rows.map((r) => [r.user_id, r.n]));
+
+    let emailsSent = 0;
+    for (const user of usersR.rows) {
+      const completedAssignments = asgMap.get(user.id) || 0;
+      const completedTasks = taskMap.get(user.id) || 0;
+      const newGrades = gradeMap.get(user.id) || 0;
+      const totalCompleted = completedAssignments + completedTasks;
+
+      // Nothing happened this week for this person — skip rather than
+      // send a discouraging "you did nothing" email.
+      if (totalCompleted === 0 && newGrades === 0) continue;
+
+      await sendEmail({
+        to: user.email,
+        subject: `Your EduFlow week in review — ${totalCompleted} task${totalCompleted === 1 ? '' : 's'} done`,
+        html: `
+          <p>Hi ${user.name},</p>
+          <p>Here's what you got done on EduFlow this week:</p>
+          <ul>
+            <li>${completedAssignments} assignment${completedAssignments === 1 ? '' : 's'} completed</li>
+            <li>${completedTasks} study task${completedTasks === 1 ? '' : 's'} completed</li>
+            ${newGrades ? `<li>${newGrades} new grade${newGrades === 1 ? '' : 's'} logged</li>` : ''}
+            ${user.current_streak ? `<li>Current streak: ${user.current_streak} day${user.current_streak === 1 ? '' : 's'}</li>` : ''}
+          </ul>
+          <p>Keep it up — open EduFlow to see what's next this week.</p>
+        `,
+      });
+      emailsSent += 1;
+    }
+
+    console.log(`[weekly-recap] ran: ${emailsSent} email(s) sent`);
+    res.json({ emailsSent });
+  } catch (e) {
+    console.error('send-weekly-recap error', e);
+    res.status(500).json({ error: 'Could not send weekly recaps.' });
   }
 });
 

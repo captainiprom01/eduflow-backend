@@ -5,8 +5,11 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
-function todayStr() {
+function todayStrUtc() {
   return new Date().toISOString().slice(0, 10);
+}
+function isValidDateStr(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 function daysBetween(dateStrA, dateStrB) {
   const a = new Date(dateStrA + 'T00:00:00Z');
@@ -17,21 +20,34 @@ function daysBetween(dateStrA, dateStrB) {
 // Called once per session boot. Updates the login streak using calendar
 // days, not a rolling 24h window — so it doesn't matter what time of day
 // someone logs in, only whether today is a new day since their last visit.
-async function checkInStreak(userId) {
+//
+// "Today" is normally the server's UTC date, but the server and a
+// person's own timezone can disagree about which calendar day it is —
+// e.g. someone in Nigeria (UTC+1) checking in late evening might already
+// be in a new local day while the server, still on UTC, considers it
+// the previous one. When the frontend sends the device's own local date,
+// prefer it — but only ever trust it within 1 day of the server's date,
+// so a client can't manufacture a fake gap to jump the streak forward.
+async function checkInStreak(userId, clientToday) {
   const result = await pool.query(
     'SELECT current_streak, longest_streak, last_active_date FROM users WHERE id = $1',
     [userId]
   );
   const row = result.rows[0];
-  const today = todayStr();
+  const serverToday = todayStrUtc();
+  const today =
+    isValidDateStr(clientToday) && Math.abs(daysBetween(serverToday, clientToday)) <= 1
+      ? clientToday
+      : serverToday;
   let currentStreak = row.current_streak;
 
   if (!row.last_active_date) {
     currentStreak = 1;
   } else {
     const gap = daysBetween(row.last_active_date, today);
-    if (gap === 0) {
-      // Already checked in today — no change.
+    if (gap <= 0) {
+      // Already checked in today (or a client-date quirk puts it at/before
+      // the last recorded day) — no change either way.
     } else if (gap === 1) {
       currentStreak = row.current_streak + 1;
     } else {
@@ -49,7 +65,7 @@ async function checkInStreak(userId) {
 
 router.get('/', async (req, res) => {
   try {
-    const { currentStreak, longestStreak } = await checkInStreak(req.userId);
+    const { currentStreak, longestStreak } = await checkInStreak(req.userId, req.query.localDate);
 
     const [coursesR, semestersR, assignmentsR, tasksR, cgpaR] = await Promise.all([
       pool.query('SELECT COUNT(*)::int AS n FROM courses WHERE user_id = $1', [req.userId]),

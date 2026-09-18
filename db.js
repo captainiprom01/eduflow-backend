@@ -89,16 +89,20 @@ const SCHEMA = `
     due_date DATE NOT NULL,
     priority TEXT NOT NULL DEFAULT 'normal',
     done BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
   );
+  ALTER TABLE assignments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
   CREATE TABLE IF NOT EXISTS study_tasks (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     done BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
   );
+  ALTER TABLE study_tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
   CREATE TABLE IF NOT EXISTS achievements_earned (
     id SERIAL PRIMARY KEY,

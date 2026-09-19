@@ -8,7 +8,12 @@ const { sendEmail } = require('../lib/email');
 const router = express.Router();
 router.use(requireAuth);
 
-const USER_FIELDS = 'id, name, email, (password_hash IS NOT NULL) AS has_password, email_verified';
+const USER_FIELDS = 'id, name, email, school, department, programme, level, (password_hash IS NOT NULL) AS has_password, email_verified';
+
+function cleanProfileValue(value) {
+  const text = value == null ? '' : String(value).trim();
+  return text ? text.slice(0, 160) : null;
+}
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -37,16 +42,27 @@ async function sendVerificationEmail(userId, toEmail) {
 
 router.patch('/profile', async (req, res) => {
   try {
-    const { name } = req.body || {};
+    const { name, school, department, programme, level } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Name is required.' });
+    const updates = ['name = $1'];
+    const values = [String(name).trim().slice(0, 160)];
+    for (const [field, value] of [['school', school], ['department', department], ['programme', programme], ['level', level]]) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+        values.push(cleanProfileValue(value));
+        updates.push(`${field} = $${values.length}`);
+      }
+    }
+    values.push(req.userId);
     const result = await pool.query(
-      `UPDATE users SET name = $1 WHERE id = $2 RETURNING ${USER_FIELDS}`,
-      [String(name).trim(), req.userId]
+      `UPDATE users SET ${updates.join(', ')}
+       WHERE id = $${values.length}
+       RETURNING ${USER_FIELDS}`,
+      values
     );
     res.json({ user: result.rows[0] });
   } catch (e) {
     console.error('update profile error', e);
-    res.status(500).json({ error: 'Could not update your name.' });
+    res.status(500).json({ error: 'Could not update your profile.' });
   }
 });
 

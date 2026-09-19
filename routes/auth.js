@@ -10,7 +10,7 @@ const { authLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 const googleClient = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID) : null;
-const USER_FIELDS = 'id, name, email, (password_hash IS NOT NULL) AS has_password, email_verified';
+const USER_FIELDS = 'id, name, email, school, department, programme, level, (password_hash IS NOT NULL) AS has_password, email_verified';
 
 function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d' });

@@ -20,6 +20,10 @@ const SCHEMA = `
     current_streak INTEGER NOT NULL DEFAULT 0,
     longest_streak INTEGER NOT NULL DEFAULT 0,
     last_active_date DATE,
+    school TEXT,
+    department TEXT,
+    programme TEXT,
+    level TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
   );
 
@@ -37,6 +41,10 @@ const SCHEMA = `
   ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS longest_streak INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS school TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS programme TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS level TEXT;
 
   -- Accounts that already existed before this column was added have
   -- already proven their email works (they got password-reset emails,

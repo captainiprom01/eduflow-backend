@@ -124,6 +124,19 @@ const SCHEMA = `
     UNIQUE (user_id, achievement_key)
   );
 
+  CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    assignment_notifications BOOLEAN NOT NULL DEFAULT true,
+    announcement_notifications BOOLEAN NOT NULL DEFAULT true,
+    grade_notifications BOOLEAN NOT NULL DEFAULT true,
+    message_notifications BOOLEAN NOT NULL DEFAULT true,
+    ai_suggestions BOOLEAN NOT NULL DEFAULT true,
+    ai_reminders BOOLEAN NOT NULL DEFAULT true,
+    profile_visibility BOOLEAN NOT NULL DEFAULT true,
+    theme TEXT NOT NULL DEFAULT 'system' CHECK (theme IN ('system', 'light', 'dark')),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
   CREATE TABLE IF NOT EXISTS conversations (
     id SERIAL PRIMARY KEY,
     kind TEXT NOT NULL DEFAULT 'direct' CHECK (kind IN ('direct', 'group')),

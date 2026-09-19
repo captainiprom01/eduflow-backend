@@ -3,16 +3,24 @@ const { WebSocketServer, WebSocket } = require('ws');
 const { URL } = require('url');
 
 const clientsByUser = new Map();
+const onlineUsers = new Set();
 
 function addClient(userId, socket) {
   const key = String(userId);
+  const wasOnline = onlineUsers.has(key);
+  onlineUsers.add(key);
   if (!clientsByUser.has(key)) clientsByUser.set(key, new Set());
   clientsByUser.get(key).add(socket);
+  if (!wasOnline) broadcastToUsers([...clientsByUser.keys()], { type: 'presence.changed', userId: Number(userId), online: true });
   socket.on('close', () => {
     const clients = clientsByUser.get(key);
     if (!clients) return;
     clients.delete(socket);
-    if (!clients.size) clientsByUser.delete(key);
+    if (!clients.size) {
+      clientsByUser.delete(key);
+      onlineUsers.delete(key);
+      broadcastToUsers([...clientsByUser.keys()], { type: 'presence.changed', userId: Number(userId), online: false });
+    }
   });
 }
 
@@ -47,6 +55,7 @@ function attachRealtime(server) {
       ws.userId = payload.userId;
       addClient(payload.userId, ws);
       ws.send(JSON.stringify({ type: 'connected' }));
+      ws.send(JSON.stringify({ type: 'presence.snapshot', userIds: [...onlineUsers].map(Number) }));
     });
   });
   return wss;

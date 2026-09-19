@@ -25,6 +25,7 @@ router.get('/contacts', async (req, res) => {
       `SELECT id, name, email, school, department, programme, level
        FROM users
        WHERE id <> $1
+         AND NOT EXISTS (SELECT 1 FROM user_preferences hidden_preferences WHERE hidden_preferences.user_id = users.id AND hidden_preferences.profile_visibility = false)
          AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%')
        ORDER BY name ASC
        LIMIT 30`,

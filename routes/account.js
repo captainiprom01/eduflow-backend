@@ -19,12 +19,12 @@ function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
 }
 
-const PREFERENCE_FIELDS = ['assignment_notifications', 'announcement_notifications', 'grade_notifications', 'message_notifications', 'ai_suggestions', 'ai_reminders', 'profile_visibility', 'theme'];
+const PREFERENCE_FIELDS = ['assignment_notifications', 'announcement_notifications', 'grade_notifications', 'message_notifications', 'ai_suggestions', 'ai_reminders', 'ai_model', 'analytics_sharing', 'profile_visibility', 'theme'];
 
 router.get('/preferences', async (req, res) => {
   try {
     await pool.query('INSERT INTO user_preferences (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [req.userId]);
-    const result = await pool.query('SELECT assignment_notifications, announcement_notifications, grade_notifications, message_notifications, ai_suggestions, ai_reminders, profile_visibility, theme FROM user_preferences WHERE user_id = $1', [req.userId]);
+    const result = await pool.query('SELECT assignment_notifications, announcement_notifications, grade_notifications, message_notifications, ai_suggestions, ai_reminders, ai_model, analytics_sharing, profile_visibility, theme FROM user_preferences WHERE user_id = $1', [req.userId]);
     res.json({ preferences: result.rows[0] });
   } catch (e) {
     console.error('get preferences error', e);
@@ -42,6 +42,8 @@ router.patch('/preferences', async (req, res) => {
       if (field === 'theme') {
         if (!['system', 'light', 'dark'].includes(String(body[field]))) return res.status(400).json({ error: 'Theme must be system, light, or dark.' });
         values.push(String(body[field]));
+      } else if (field === 'ai_model') {
+        values.push(String(body[field] || '').trim().slice(0, 120));
       } else {
         values.push(Boolean(body[field]));
       }
@@ -50,7 +52,7 @@ router.patch('/preferences', async (req, res) => {
     if (!updates.length) return res.status(400).json({ error: 'No valid preferences were supplied.' });
     values.push(req.userId);
     await pool.query('INSERT INTO user_preferences (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [req.userId]);
-    const result = await pool.query(`UPDATE user_preferences SET ${updates.join(', ')}, updated_at = now() WHERE user_id = $${values.length} RETURNING assignment_notifications, announcement_notifications, grade_notifications, message_notifications, ai_suggestions, ai_reminders, profile_visibility, theme`, values);
+    const result = await pool.query(`UPDATE user_preferences SET ${updates.join(', ')}, updated_at = now() WHERE user_id = $${values.length} RETURNING assignment_notifications, announcement_notifications, grade_notifications, message_notifications, ai_suggestions, ai_reminders, ai_model, analytics_sharing, profile_visibility, theme`, values);
     res.json({ preferences: result.rows[0] });
   } catch (e) {
     console.error('update preferences error', e);

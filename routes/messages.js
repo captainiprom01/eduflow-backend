@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { broadcastToUsers } = require('../realtime');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -81,6 +82,35 @@ router.get('/conversations', async (req, res) => {
   }
 });
 
+router.post('/groups', async (req, res) => {
+  const title = cleanText(req.body && req.body.title, 120);
+  const requestedIds = Array.isArray(req.body && req.body.userIds) ? req.body.userIds : [];
+  const memberIds = [...new Set([req.userId, ...requestedIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)])];
+  if (!title) return res.status(400).json({ error: 'Group name is required.' });
+  if (memberIds.length < 3) return res.status(400).json({ error: 'Add at least two other users to create a group.' });
+
+  try {
+    const users = await pool.query('SELECT id FROM users WHERE id = ANY($1::int[])', [memberIds]);
+    if (users.rowCount !== memberIds.length) return res.status(400).json({ error: 'One or more selected users could not be found.' });
+    const conversation = await pool.query(
+      `INSERT INTO conversations (kind, title, created_by) VALUES ('group', $1, $2) RETURNING id`,
+      [title, req.userId]
+    );
+    const conversationId = conversation.rows[0].id;
+    await pool.query(
+      `INSERT INTO conversation_members (conversation_id, user_id, last_read_at)
+       SELECT $1, member_id, CASE WHEN member_id = $2 THEN now() ELSE NULL END
+       FROM unnest($3::int[]) AS member_id`,
+      [conversationId, req.userId, memberIds]
+    );
+    broadcastToUsers(memberIds, { type: 'conversation.created', conversationId });
+    res.status(201).json({ conversationId, title, memberCount: memberIds.length });
+  } catch (e) {
+    console.error('create group conversation error', e);
+    res.status(500).json({ error: 'Could not create group conversation.' });
+  }
+});
+
 router.post('/conversations', async (req, res) => {
   const otherUserId = Number(req.body && (req.body.userId || req.body.user_id));
   if (!Number.isInteger(otherUserId) || otherUserId <= 0 || otherUserId === req.userId) {
@@ -123,6 +153,7 @@ router.post('/conversations', async (req, res) => {
       );
     }
     await client.query('COMMIT');
+    if (!existing.rowCount) broadcastToUsers([otherUserId], { type: 'conversation.created', conversationId });
     res.status(existing.rowCount ? 200 : 201).json({ conversationId, user: otherUser.rows[0] });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -182,6 +213,8 @@ router.post('/conversations/:id/messages', async (req, res) => {
       'UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2',
       [conversationId, req.userId]
     );
+    const members = await pool.query('SELECT user_id FROM conversation_members WHERE conversation_id = $1', [conversationId]);
+    broadcastToUsers(members.rows.map((member) => member.user_id), { type: 'message.created', conversationId, message: result.rows[0] });
     res.status(201).json({ message: result.rows[0] });
   } catch (e) {
     console.error('send message error', e);

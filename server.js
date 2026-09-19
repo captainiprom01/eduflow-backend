@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const { initDb } = require('./db');
@@ -17,10 +18,12 @@ const cronRoutes = require('./routes/cron');
 const assistantRoutes = require('./routes/assistant');
 const streakRoutes = require('./routes/streak');
 const { generalLimiter } = require('./middleware/rateLimit');
-
+const { attachRealtime } = require('./realtime');
 const app = express();
 const PORT = process.env.PORT || 4000;
 const corsOrigin = process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*' ? process.env.CORS_ORIGIN.split(',') : '*';
+const server = http.createServer(app);
+attachRealtime(server);
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
@@ -42,7 +45,7 @@ app.use('/api/streak', streakRoutes);
 
 initDb()
   .then(() => {
-    app.listen(PORT, () => console.log(`EduFlow API listening on port ${PORT}`));
+    server.listen(PORT, () => console.log(`EduFlow API listening on port ${PORT}`));
   })
   .catch((e) => {
     console.error('Failed to initialize database', e);

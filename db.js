@@ -132,6 +132,8 @@ const SCHEMA = `
     message_notifications BOOLEAN NOT NULL DEFAULT true,
     ai_suggestions BOOLEAN NOT NULL DEFAULT true,
     ai_reminders BOOLEAN NOT NULL DEFAULT true,
+    ai_model TEXT NOT NULL DEFAULT '',
+    analytics_sharing BOOLEAN NOT NULL DEFAULT true,
     profile_visibility BOOLEAN NOT NULL DEFAULT true,
     theme TEXT NOT NULL DEFAULT 'system' CHECK (theme IN ('system', 'light', 'dark')),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -176,6 +178,8 @@ async function initDb() {
   try {
     await pool.query('SELECT 1');
     await pool.query(SCHEMA);
+    await pool.query("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS ai_model TEXT NOT NULL DEFAULT ''");
+    await pool.query("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS analytics_sharing BOOLEAN NOT NULL DEFAULT true");
     console.log('Database ready');
   } catch (error) {
     console.error('Database initialization failed:', error);

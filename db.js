@@ -124,10 +124,39 @@ const SCHEMA = `
     UNIQUE (user_id, achievement_key)
   );
 
+  CREATE TABLE IF NOT EXISTS conversations (
+    id SERIAL PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'direct' CHECK (kind IN ('direct', 'group')),
+    title TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  CREATE TABLE IF NOT EXISTS conversation_members (
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_read_at TIMESTAMPTZ,
+    PRIMARY KEY (conversation_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 4000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    edited_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ
+  );
+
   CREATE INDEX IF NOT EXISTS idx_courses_user_id ON courses(user_id);
   CREATE INDEX IF NOT EXISTS idx_semesters_user_id ON semesters(user_id);
   CREATE INDEX IF NOT EXISTS idx_assignments_user_id ON assignments(user_id);
   CREATE INDEX IF NOT EXISTS idx_study_tasks_user_id ON study_tasks(user_id);
+  CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
 `;
 
 async function initDb() {

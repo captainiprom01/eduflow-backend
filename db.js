@@ -1,8 +1,15 @@
 const { Pool } = require('pg');
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not defined');
+function validateEnvironment() {
+  const required = ['DATABASE_URL', 'JWT_SECRET'];
+  for (const key of required) {
+    if (!process.env[key]) {
+      throw new Error(`${key} is not defined`);
+    }
+  }
 }
+
+validateEnvironment();
 
 const isLocalDatabase =
   process.env.DATABASE_URL.includes('localhost') ||
@@ -10,8 +17,8 @@ const isLocalDatabase =
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: isLocalDatabase ? false : { rejectUnauthorized: false },
-  max: 20,
+  ssl: isLocalDatabase ? false : { rejectUnauthorized: true },
+  max: 15,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
@@ -169,7 +176,11 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_courses_user_id ON courses(user_id);
   CREATE INDEX IF NOT EXISTS idx_semesters_user_id ON semesters(user_id);
   CREATE INDEX IF NOT EXISTS idx_assignments_user_id ON assignments(user_id);
+  CREATE INDEX IF NOT EXISTS idx_assignments_user_due_date ON assignments(user_id, due_date);
+  CREATE INDEX IF NOT EXISTS idx_assignments_user_done ON assignments(user_id, done);
   CREATE INDEX IF NOT EXISTS idx_study_tasks_user_id ON study_tasks(user_id);
+  CREATE INDEX IF NOT EXISTS idx_study_tasks_user_done ON study_tasks(user_id, done);
+  CREATE INDEX IF NOT EXISTS idx_cgpa_user_semester ON cgpa_entries(user_id, semester_id);
   CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
 `;

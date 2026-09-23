@@ -1,0 +1,19 @@
+const fs = require('fs');
+const assert = require('assert');
+const server = fs.readFileSync('server.js', 'utf8');
+const db = fs.readFileSync('db.js', 'utf8');
+const streak = fs.readFileSync('routes/streak.js', 'utf8');
+const announcements = fs.readFileSync('routes/announcements.js', 'utf8');
+const packageJson = require('../package.json');
+
+assert(server.includes("app.use('/api/messages', messageRoutes)"));
+assert(server.includes("app.use('/api/announcements', announcementRoutes)"));
+assert(db.includes('CREATE TABLE IF NOT EXISTS announcements'));
+assert(db.includes('CREATE TABLE IF NOT EXISTS announcement_reads'));
+assert(db.includes('CREATE TABLE IF NOT EXISTS study_activity'));
+assert(streak.includes("router.post('/activity'"));
+assert(announcements.includes("router.get('/',"));
+assert(announcements.includes("router.post('/:id/read',"));
+assert(packageJson.dependencies.express === '^4.22.3');
+assert(packageJson.dependencies['google-auth-library'] === '^11.1.0');
+console.log('EduFlow backend contract smoke test: PASS');

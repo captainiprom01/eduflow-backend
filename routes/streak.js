@@ -214,4 +214,20 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.post('/activity', async (req, res) => {
+  try {
+    const source = typeof req.body?.source === 'string' ? req.body.source.slice(0, 40) : 'study';
+    const result = await checkInStreak(req.userId, req.body?.localDate);
+    await pool.query(
+      `INSERT INTO study_activity (user_id, activity_date, source)
+       VALUES ($1, COALESCE($2::date, CURRENT_DATE), $3)
+       ON CONFLICT (user_id, activity_date) DO UPDATE SET source = EXCLUDED.source`,
+      [req.userId, req.body?.localDate || null, source || 'study']
+    );
+    res.json({ ...result, source });
+  } catch (e) {
+    console.error('study activity error', e);
+    res.status(500).json({ error: 'Could not record study activity.' });
+  }
+});
 module.exports = router;

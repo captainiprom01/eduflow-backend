@@ -166,12 +166,42 @@ const SCHEMA = `
     deleted_at TIMESTAMPTZ
   );
 
+  CREATE TABLE IF NOT EXISTS announcements (
+    id SERIAL PRIMARY KEY,
+    category TEXT NOT NULL DEFAULT 'Campus',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT 'EduFlow',
+    icon TEXT NOT NULL DEFAULT 'fa-bullhorn',
+    color TEXT NOT NULL DEFAULT '#2563eb',
+    bg TEXT NOT NULL DEFAULT '#eff6ff',
+    published BOOLEAN NOT NULL DEFAULT true,
+    published_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  CREATE TABLE IF NOT EXISTS announcement_reads (
+    announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (announcement_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS study_activity (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    activity_date DATE NOT NULL,
+    source TEXT NOT NULL DEFAULT 'study',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, activity_date)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_courses_user_id ON courses(user_id);
   CREATE INDEX IF NOT EXISTS idx_semesters_user_id ON semesters(user_id);
   CREATE INDEX IF NOT EXISTS idx_assignments_user_id ON assignments(user_id);
   CREATE INDEX IF NOT EXISTS idx_study_tasks_user_id ON study_tasks(user_id);
   CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(published, published_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_study_activity_user_date ON study_activity(user_id, activity_date DESC);
 `;
 
 async function initDb() {
@@ -180,6 +210,14 @@ async function initDb() {
     await pool.query(SCHEMA);
     await pool.query("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS ai_model TEXT NOT NULL DEFAULT ''");
     await pool.query("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS analytics_sharing BOOLEAN NOT NULL DEFAULT true");
+    const count = await pool.query('SELECT COUNT(*)::int AS n FROM announcements');
+    if (count.rows[0].n === 0) {
+      await pool.query(`INSERT INTO announcements (category, title, body, author, icon, color, bg) VALUES
+        ('Academic','Examination timetable updates','Check the latest examination schedule and confirm your courses before the registration deadline.','Examinations Office','fa-calendar-days','#2563eb','#eff6ff'),
+        ('Campus','Extended library opening hours','The main library will remain open later during the revision period to support students preparing for assessments.','University Library','fa-building-columns','#059669','#ecfdf5'),
+        ('Events','EduFlow study skills workshop','Join this week’s practical session on planning a study week, managing deadlines, and using EduAI effectively.','Student Success Team','fa-lightbulb','#7c3aed','#f5f3ff'),
+        ('Campus','Student support services available','Academic advising, counselling, and accessibility support remain available through the student services centre.','Student Affairs','fa-heart','#db2777','#fdf2f8')`);
+    }
     console.log('Database ready');
   } catch (error) {
     console.error('Database initialization failed:', error);

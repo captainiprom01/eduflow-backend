@@ -8,6 +8,7 @@ const packageJson = require('../package.json');
 
 assert(server.includes("app.use('/api/messages', messageRoutes)"));
 assert(server.includes("app.use('/api/announcements', announcementRoutes)"));
+assert(server.includes("app.get('/health'"));
 assert(db.includes('CREATE TABLE IF NOT EXISTS announcements'));
 assert(db.includes('CREATE TABLE IF NOT EXISTS announcement_reads'));
 assert(db.includes('CREATE TABLE IF NOT EXISTS study_activity'));

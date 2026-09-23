@@ -2,7 +2,7 @@ require('dotenv').config();
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
-const { initDb } = require('./db');
+const { initDb, pool } = require('./db');
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
@@ -29,6 +29,16 @@ attachRealtime(server);
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 app.use(generalLimiter);
+
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error('health check failed', error);
+    res.status(503).json({ status: 'degraded' });
+  }
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);

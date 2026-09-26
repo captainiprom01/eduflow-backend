@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "migrate": "node tools/migrate.js",
-    "start": "node server.js",
+    "start": "npm run migrate && node server.js",
     "dev": "node --watch server.js",
     "test:contract": "node tools/contract_smoke_test.js",
     "test:integration": "node --test tools/integration_test.js",

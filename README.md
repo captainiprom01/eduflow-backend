@@ -27,9 +27,9 @@ backend/
     progress.js         <- completion % logic lives here
 ```
 
-Database schema changes are versioned in `migrations/` and must be applied
-before starting the API with `npm run migrate`. Normal server startup only
-checks database connectivity.
+Database schema changes are versioned in `migrations/`. Production `npm start`
+applies pending migrations before launching the API; local development can run
+`npm run migrate` explicitly before `npm run dev`.
 
 ## 1. Local setup
 

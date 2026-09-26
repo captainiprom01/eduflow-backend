@@ -1,0 +1,31 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "EduFlow API", "version": "1.0.0", "description": "Authentication, academic planning, messaging, progress, and study-assistant APIs for EduFlow." },
+  "servers": [{ "url": "https://eduflow-s7wu.onrender.com" }],
+  "tags": [{ "name": "Health" }, { "name": "Authentication" }, { "name": "Announcements" }, { "name": "Quotes" }, { "name": "Messages" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "eduflow_session" }
+    },
+    "schemas": {
+      "Error": { "type": "object", "required": ["error", "code", "requestId"], "properties": { "error": { "type": "string" }, "code": { "type": "string" }, "requestId": { "type": "string" } } },
+      "Pagination": { "type": "object", "properties": { "page": { "type": "integer", "minimum": 1 }, "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }, "total": { "type": "integer", "minimum": 0 }, "totalPages": { "type": "integer", "minimum": 0 } } }
+    },
+    "parameters": {
+      "Page": { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+      "PageSize": { "name": "pageSize", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+    },
+    "responses": { "Unauthorized": { "description": "Authentication is required" } }
+  },
+  "paths": {
+    "/": { "get": { "tags": ["Health"], "summary": "Service metadata", "responses": { "200": { "description": "Service is reachable" } } } },
+    "/health/live": { "get": { "tags": ["Health"], "summary": "Liveness probe", "responses": { "200": { "description": "Process is alive" } } } },
+    "/health/ready": { "get": { "tags": ["Health"], "summary": "Database readiness probe", "responses": { "200": { "description": "Database is ready" }, "503": { "description": "Database is unavailable" } } } },
+    "/api/auth/me": { "get": { "tags": ["Authentication"], "security": [{ "bearerAuth": [] }, { "sessionCookie": [] }], "summary": "Return the current user", "responses": { "200": { "description": "Current user" }, "401": { "$ref": "#/components/responses/Unauthorized" } } } },
+    "/api/auth/logout": { "post": { "tags": ["Authentication"], "security": [{ "bearerAuth": [] }, { "sessionCookie": [] }], "summary": "Revoke the current session", "responses": { "200": { "description": "Session revoked" }, "401": { "$ref": "#/components/responses/Unauthorized" } } } },
+    "/api/announcements": { "get": { "tags": ["Announcements"], "security": [{ "bearerAuth": [] }, { "sessionCookie": [] }], "parameters": [{ "$ref": "#/components/parameters/Page" }, { "$ref": "#/components/parameters/PageSize" }], "responses": { "200": { "description": "Paginated announcements" } } } },
+    "/api/quotes/daily": { "get": { "tags": ["Quotes"], "security": [{ "bearerAuth": [] }, { "sessionCookie": [] }], "parameters": [{ "name": "date", "in": "query", "schema": { "type": "string", "format": "date" } }], "responses": { "200": { "description": "Daily motivational quote" } } } },
+    "/api/messages/conversations": { "get": { "tags": ["Messages"], "security": [{ "bearerAuth": [] }, { "sessionCookie": [] }], "parameters": [{ "$ref": "#/components/parameters/Page" }, { "$ref": "#/components/parameters/PageSize" }], "responses": { "200": { "description": "Paginated conversations" } } } }
+  }
+}

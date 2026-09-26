@@ -34,10 +34,19 @@ test('responses include security headers and only allow the configured frontend 
   assert.equal(allowed.headers['access-control-allow-credentials'], 'true');
   assert.equal(allowed.headers['x-content-type-options'], 'nosniff');
   assert.equal(allowed.headers['x-frame-options'], 'SAMEORIGIN');
+  assert.match(allowed.headers['content-security-policy'], /default-src 'self'/);
+  assert.doesNotMatch(allowed.headers['content-security-policy'], /content-security-policy false/);
 
   const denied = await request(app).get('/').set('Origin', 'https://attacker.example');
   assert.equal(denied.status, 200);
   assert.equal(denied.headers['access-control-allow-origin'], undefined);
+});
+
+test('OpenAPI document is available without authentication', async () => {
+  const response = await request(app).get('/api/openapi.json');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.openapi, '3.0.3');
+  assert.ok(response.body.paths['/api/auth/logout']);
 });
 
 test('unknown routes return a stable error contract', async () => {

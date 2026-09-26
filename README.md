@@ -60,6 +60,11 @@ HttpOnly-cookie sessions. If Render still has `CORS_ORIGIN=*`, the validated
 See [`docs/operations.md`](docs/operations.md) for backup, restore, monitoring,
 scheduled-job, and incident-response procedures.
 
+The versioned API contract is available at `/api/openapi.json`, and the
+human-readable source is [`docs/openapi.json`](docs/openapi.json). Migration
+`003_query_performance_indexes.sql` adds indexes for dashboard, messaging,
+assignment, recap, and announcement queries.
+
 Generate a JWT secret quickly with:
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"

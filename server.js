@@ -9,6 +9,7 @@ const { requestContext } = require('./middleware/requestContext');
 const { notFound, errorHandler } = require('./middleware/errors');
 const { csrfProtection } = require('./middleware/csrf');
 const helmet = require('helmet');
+const openapi = require('./docs/openapi.json');
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
@@ -33,7 +34,30 @@ const server = http.createServer(app);
 const realtime = attachRealtime(server);
 
 app.use(requestContext);
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'self'"],
+      formAction: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        'https://cdn.tailwindcss.com',
+        'https://cdnjs.cloudflare.com',
+        'https://accounts.google.com',
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'", 'https:', 'wss:'],
+      frameSrc: ["'self'", 'https://accounts.google.com'],
+    },
+  },
+}));
 app.use(cors({ origin: config.corsOrigins, credentials: config.corsCredentials }));
 app.use(express.json({ limit: '1mb' }));
 app.use(csrfProtection(config.corsOrigins));
@@ -56,6 +80,7 @@ async function readinessHandler(req, res) {
 app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/ready', readinessHandler);
 app.get('/health', readinessHandler);
+app.get('/api/openapi.json', (req, res) => res.json(openapi));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);

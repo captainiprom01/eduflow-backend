@@ -31,3 +31,9 @@ jobs:
           node --check routes/auth.js
           node --check routes/quotes.js
           node --check tools/migrate.js
+      - name: Validate API contract and migrations
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('docs/openapi.json', 'utf8'))"
+          test -s migrations/001_initial_schema.sql
+          test -s migrations/002_sessions_and_job_runs.sql
+          test -s migrations/003_query_performance_indexes.sql

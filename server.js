@@ -28,9 +28,12 @@ attachRealtime(server);
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
-app.use(generalLimiter);
 
-app.get('/health', async (req, res) => {
+app.get('/', (req, res) => {
+  res.json({ ok: true, service: 'EduFlow API' });
+});
+
+async function readinessHandler(req, res) {
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok' });
@@ -38,7 +41,14 @@ app.get('/health', async (req, res) => {
     console.error('health check failed', error);
     res.status(503).json({ status: 'degraded' });
   }
-});
+}
+
+// Keep process liveness cheap and separate from database readiness checks.
+app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
+app.get('/health/ready', readinessHandler);
+app.get('/health', readinessHandler);
+
+app.use(generalLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);

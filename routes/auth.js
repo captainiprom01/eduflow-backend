@@ -99,4 +99,15 @@ router.post('/google', authLimiter, async (req, res) => {
   } catch (e) { console.error('google sign-in error', e); res.status(401).json({ error: 'Could not verify Google sign-in.' }); }
 });
 
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT ${USER_FIELDS} FROM users WHERE id = $1`, [req.userId]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    res.json({ user: result.rows[0] });
+  } catch (e) {
+    console.error('get current user error', e);
+    res.status(500).json({ error: 'Could not load your account.' });
+  }
+});
+
 module.exports = router;

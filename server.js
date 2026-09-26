@@ -17,6 +17,7 @@ const progressRoutes = require('./routes/progress');
 const cronRoutes = require('./routes/cron');
 const assistantRoutes = require('./routes/assistant');
 const streakRoutes = require('./routes/streak');
+const quoteRoutes = require('./routes/quotes');
 const { router: announcementRoutes } = require('./routes/announcements');
 const { generalLimiter } = require('./middleware/rateLimit');
 const { attachRealtime } = require('./realtime');
@@ -63,6 +64,7 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api/streak', streakRoutes);
+app.use('/api/quotes', quoteRoutes);
 app.use('/api/announcements', announcementRoutes);
 
 initDb()

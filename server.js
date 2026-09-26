@@ -32,7 +32,7 @@ const server = http.createServer(app);
 const realtime = attachRealtime(server);
 
 app.use(requestContext);
-app.use(cors({ origin: config.corsOrigins, credentials: true }));
+app.use(cors({ origin: config.corsOrigins, credentials: config.corsCredentials }));
 app.use(express.json({ limit: '1mb' }));
 app.use(csrfProtection(config.corsOrigins));
 

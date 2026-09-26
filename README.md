@@ -53,6 +53,10 @@ The health endpoints are `/health/live` for process liveness and
 npm test
 ```
 
+Set `CORS_ORIGIN` to the exact deployed frontend origin for credentialed
+HttpOnly-cookie sessions. A wildcard (`*`) remains supported for the current
+bearer-token deployment, but credentialed cookies are disabled in that mode.
+
 See [`docs/operations.md`](docs/operations.md) for backup, restore, monitoring,
 scheduled-job, and incident-response procedures.
 

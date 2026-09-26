@@ -25,15 +25,14 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
-if (env.NODE_ENV === 'production' && env.CORS_ORIGIN === '*') {
-  throw new Error('CORS_ORIGIN must name the frontend origin in production; wildcard origins cannot protect cookies.');
-}
+const corsCredentials = env.CORS_ORIGIN !== '*';
 const config = {
   ...env,
   databaseUrl: env.DATABASE_URL,
   databasePoolMax: env.DATABASE_POOL_MAX,
   port: env.PORT,
   corsOrigins: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
+  corsCredentials,
 };
 
 module.exports = { config };

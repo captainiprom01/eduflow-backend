@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Call the reminders endpoint
         run: |
-          response=$(curl -w "\n%{http_code}" --silent -X POST "${{ vars.BACKEND_URL }}/api/cron/send-reminders?key=${{ secrets.CRON_SECRET }}")
+          response=$(curl -w "\n%{http_code}" --silent -X POST -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" "${{ vars.BACKEND_URL }}/api/cron/send-reminders")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | head -n-1)
           

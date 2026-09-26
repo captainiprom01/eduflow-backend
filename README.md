@@ -53,6 +53,9 @@ The health endpoints are `/health/live` for process liveness and
 npm test
 ```
 
+See [`docs/operations.md`](docs/operations.md) for backup, restore, monitoring,
+scheduled-job, and incident-response procedures.
+
 Generate a JWT secret quickly with:
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"

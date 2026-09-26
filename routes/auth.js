@@ -18,7 +18,8 @@ const loginSchema = z.object({ email: z.string().email().max(320), password: z.s
 const googleSchema = z.object({ credential: z.string().min(1).max(10000) });
 
 function signToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d', algorithm: 'HS256' });
+  const sessionId = crypto.randomUUID();
+  return { sessionId, token: jwt.sign({ userId, jti: sessionId }, process.env.JWT_SECRET, { expiresIn: '30d', algorithm: 'HS256' }) };
 }
 
 function setSessionCookie(res, token) {
@@ -26,17 +27,13 @@ function setSessionCookie(res, token) {
   const secure = process.env.NODE_ENV === 'production';
   // HttpOnly prevents JavaScript from reading the credential. SameSite and the
   // Origin check in realtime.js reduce cross-site WebSocket abuse.
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure,
-    sameSite,
-    path: '/',
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  });
+  res.append('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; ${secure ? 'Secure; ' : ''}SameSite=${sameSite}; Path=/; Max-Age=${30 * 24 * 60 * 60}`);
 }
 
-function issueSession(res, userId) {
-  const token = signToken(userId);
+async function issueSession(res, userId) {
+  const { sessionId, token } = signToken(userId);
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  await pool.query('INSERT INTO user_sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)', [sessionId, userId, hashToken(sessionId), expiresAt]);
   setSessionCookie(res, token);
   return token;
 }
@@ -66,7 +63,7 @@ router.post('/signup', authLimiter, validate(signupSchema), async (req, res) => 
     const result = await pool.query(`INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING ${USER_FIELDS}`, [String(name).trim(), normalizedEmail, hash]);
     const user = result.rows[0];
     sendVerificationEmail(user.id, normalizedEmail).catch((e) => console.error('verification email failed', e));
-    const token = issueSession(res, user.id);
+    const token = await issueSession(res, user.id);
     res.status(201).json({ token, user });
   } catch (e) { console.error('signup error', e); res.status(500).json({ error: 'Could not create account.' }); }
 });
@@ -78,7 +75,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [String(email).trim().toLowerCase()]);
     const user = result.rows[0];
     if (!user || !user.password_hash || !(await bcrypt.compare(String(password), user.password_hash))) return res.status(401).json({ error: 'Invalid email or password.' });
-    const token = issueSession(res, user.id);
+    const token = await issueSession(res, user.id);
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, has_password: true, email_verified: user.email_verified } });
   } catch (e) { console.error('login error', e); res.status(500).json({ error: 'Could not log in.' }); }
 });
@@ -99,7 +96,7 @@ router.post('/google', authLimiter, validate(googleSchema), async (req, res) => 
       if (user) await pool.query('UPDATE users SET google_id = $1, email_verified = true WHERE id = $2', [payload.sub, user.id]);
       else user = (await pool.query(`INSERT INTO users (name, email, google_id, email_verified) VALUES ($1, $2, $3, true) RETURNING ${USER_FIELDS}`, [payload.name || normalizedEmail.split('@')[0], normalizedEmail, payload.sub])).rows[0];
     }
-    const token = issueSession(res, user.id);
+    const token = await issueSession(res, user.id);
     res.json({ token, user });
   } catch (e) { console.error('google sign-in error', e); res.status(401).json({ error: 'Could not verify Google sign-in.' }); }
 });
@@ -112,6 +109,17 @@ router.get('/me', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('get current user error', e);
     res.status(500).json({ error: 'Could not load your account.' });
+  }
+});
+
+router.post('/logout', requireAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE user_sessions SET revoked_at = now() WHERE id = $1', [req.sessionId]);
+    res.append('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; ${process.env.NODE_ENV === 'production' ? 'Secure; ' : ''}SameSite=${process.env.SESSION_COOKIE_SAMESITE || 'lax'}; Path=/; Max-Age=0`);
+    res.json({ loggedOut: true });
+  } catch (e) {
+    console.error('logout error', e);
+    res.status(500).json({ error: 'Could not log out.' });
   }
 });
 

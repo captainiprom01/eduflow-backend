@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Call the weekly recap endpoint
         run: |
-          response=$(curl -w "\n%{http_code}" --silent -X POST "${{ vars.BACKEND_URL }}/api/cron/send-weekly-recap?key=${{ secrets.CRON_SECRET }}")
+          response=$(curl -w "\n%{http_code}" --silent -X POST -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" "${{ vars.BACKEND_URL }}/api/cron/send-weekly-recap")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | head -n-1)
 

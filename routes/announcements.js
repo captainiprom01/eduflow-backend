@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { parsePagination, paginationMeta } = require('../middleware/pagination');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -24,16 +25,21 @@ async function isPublisher(req) {
 
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query(
+    const { page, pageSize, offset } = parsePagination(req.query);
+    const [countResult, result] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int AS total FROM announcements WHERE published = true'),
+      pool.query(
       `SELECT a.id, a.category, a.title, a.body, a.author, a.icon, a.color, a.bg,
               a.published_at, (ar.user_id IS NOT NULL) AS read
        FROM announcements a
        LEFT JOIN announcement_reads ar ON ar.announcement_id = a.id AND ar.user_id = $1
        WHERE a.published = true
-       ORDER BY a.published_at DESC, a.id DESC`,
-      [req.userId]
-    );
-    res.json({ announcements: result.rows });
+       ORDER BY a.published_at DESC, a.id DESC
+       LIMIT $2 OFFSET $3`,
+      [req.userId, pageSize, offset]
+      ),
+    ]);
+    res.json({ announcements: result.rows, pagination: paginationMeta(page, pageSize, countResult.rows[0].total) });
   } catch (e) {
     console.error('list announcements error', e);
     res.status(500).json({ error: 'Could not load announcements.' });

@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { sendEmail } = require('../lib/email');
+const { beginJob, finishJob, failJob } = require('../lib/jobRuns');
 
 const router = express.Router();
 
@@ -28,11 +29,19 @@ function sevenDaysAgoIso() {
   d.setUTCDate(d.getUTCDate() - 7);
   return d.toISOString();
 }
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+}
 
 router.post('/send-reminders', requireCronSecret, async (req, res) => {
+  const dueDate = tomorrowDateString();
+  const jobKey = `send-reminders:${dueDate}`;
   try {
-    const dueDate = tomorrowDateString();
-    const result = await pool.query(
+    if (!(await beginJob(jobKey))) return res.json({ dueDate, skipped: true, reason: 'already_processed_or_running' });
+    const assignmentsResult = await pool.query(
       `SELECT a.title, u.id AS user_id, u.name AS user_name, u.email AS user_email, c.name AS course_name
        FROM assignments a
        JOIN users u ON u.id = a.user_id
@@ -42,7 +51,7 @@ router.post('/send-reminders', requireCronSecret, async (req, res) => {
     );
 
     const byUser = new Map();
-    for (const row of result.rows) {
+    for (const row of assignmentsResult.rows) {
       if (!byUser.has(row.user_id)) {
         byUser.set(row.user_id, { name: row.user_name, email: row.user_email, items: [] });
       }
@@ -52,13 +61,13 @@ router.post('/send-reminders', requireCronSecret, async (req, res) => {
     let emailsSent = 0;
     for (const { name, email, items } of byUser.values()) {
       const listHtml = items
-        .map((i) => `<li>${i.title}${i.course ? ` — ${i.course}` : ''}</li>`)
+        .map((i) => `<li>${escapeHtml(i.title)}${i.course ? ` — ${escapeHtml(i.course)}` : ''}</li>`)
         .join('');
       await sendEmail({
         to: email,
         subject: `You have ${items.length} assignment${items.length === 1 ? '' : 's'} due tomorrow`,
         html: `
-          <p>Hi ${name},</p>
+          <p>Hi ${escapeHtml(name)},</p>
           <p>This is a heads-up that you have ${items.length} assignment${items.length === 1 ? '' : 's'} due tomorrow (${dueDate}):</p>
           <ul>${listHtml}</ul>
           <p>Open EduFlow to check them off as you go.</p>
@@ -67,16 +76,20 @@ router.post('/send-reminders', requireCronSecret, async (req, res) => {
       emailsSent += 1;
     }
 
-    console.log(`[reminders] ran for ${dueDate}: ${byUser.size} user(s), ${emailsSent} email(s) sent`);
-    res.json({ dueDate, usersWithReminders: byUser.size, emailsSent });
+    const result = { dueDate, usersWithReminders: byUser.size, emailsSent };
+    await finishJob(jobKey, result);
+    res.json(result);
   } catch (e) {
+    await failJob(jobKey, e);
     console.error('send-reminders error', e);
     res.status(500).json({ error: 'Could not send reminders.' });
   }
 });
 
 router.post('/send-weekly-recap', requireCronSecret, async (req, res) => {
+  const jobKey = `send-weekly-recap:${todayKey()}`;
   try {
+    if (!(await beginJob(jobKey))) return res.json({ skipped: true, reason: 'already_processed_or_running' });
     const since = sevenDaysAgoIso();
     const [usersR, completedAsgR, completedTaskR, newGradesR] = await Promise.all([
       pool.query('SELECT id, name, email, current_streak FROM users'),
@@ -104,7 +117,7 @@ router.post('/send-weekly-recap', requireCronSecret, async (req, res) => {
         to: user.email,
         subject: `Your EduFlow week in review — ${totalCompleted} task${totalCompleted === 1 ? '' : 's'} done`,
         html: `
-          <p>Hi ${user.name},</p>
+          <p>Hi ${escapeHtml(user.name)},</p>
           <p>Here's what you got done on EduFlow this week:</p>
           <ul>
             <li>${completedAssignments} assignment${completedAssignments === 1 ? '' : 's'} completed</li>
@@ -118,9 +131,11 @@ router.post('/send-weekly-recap', requireCronSecret, async (req, res) => {
       emailsSent += 1;
     }
 
-    console.log(`[weekly-recap] ran: ${emailsSent} email(s) sent`);
-    res.json({ emailsSent });
+    const result = { emailsSent };
+    await finishJob(jobKey, result);
+    res.json(result);
   } catch (e) {
+    await failJob(jobKey, e);
     console.error('send-weekly-recap error', e);
     res.status(500).json({ error: 'Could not send weekly recaps.' });
   }

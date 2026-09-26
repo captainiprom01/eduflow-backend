@@ -39,3 +39,12 @@ test('protected quote route rejects unauthenticated access', async () => {
   assert.equal(response.status, 401);
   assert.match(response.body.error, /authentication token/i);
 });
+
+test('cookie-authenticated mutations reject untrusted origins', async () => {
+  const response = await request(app)
+    .post('/api/auth/logout')
+    .set('Cookie', 'eduflow_session=placeholder')
+    .set('Origin', 'https://attacker.example');
+  assert.equal(response.status, 403);
+  assert.equal(response.body.code, 'CSRF_ORIGIN_REJECTED');
+});

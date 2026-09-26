@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { broadcastToUsers } = require('../realtime');
+const { parsePagination, paginationMeta } = require('../middleware/pagination');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -40,6 +41,7 @@ router.get('/contacts', async (req, res) => {
 
 router.get('/conversations', async (req, res) => {
   try {
+    const { page, pageSize, offset } = parsePagination(req.query);
     const result = await pool.query(
       `SELECT
          c.id,
@@ -73,10 +75,12 @@ router.get('/conversations', async (req, res) => {
          ORDER BY created_at DESC, id DESC
          LIMIT 1
        ) latest ON true
-       ORDER BY COALESCE(latest.created_at, c.updated_at) DESC, c.id DESC`,
-      [req.userId]
+       ORDER BY COALESCE(latest.created_at, c.updated_at) DESC, c.id DESC
+       LIMIT $2 OFFSET $3`,
+      [req.userId, pageSize, offset]
     );
-    res.json({ conversations: result.rows });
+    const count = await pool.query('SELECT COUNT(*)::int AS total FROM conversations c JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1', [req.userId]);
+    res.json({ conversations: result.rows, pagination: paginationMeta(page, pageSize, count.rows[0].total) });
   } catch (e) {
     console.error('list conversations error', e);
     res.status(500).json({ error: 'Could not load conversations.' });
@@ -174,16 +178,21 @@ router.get('/conversations/:id/messages', async (req, res) => {
       'UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2',
       [conversationId, req.userId]
     );
-    const result = await pool.query(
+    const { page, pageSize, offset } = parsePagination(req.query);
+    const [count, result] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int AS total FROM messages WHERE conversation_id = $1 AND deleted_at IS NULL', [conversationId]),
+      pool.query(
       `SELECT m.id, m.conversation_id, m.sender_id, u.name AS sender_name, m.body, m.created_at, m.edited_at
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        WHERE m.conversation_id = $1 AND m.deleted_at IS NULL
-       ORDER BY m.created_at ASC, m.id ASC
-       LIMIT 500`,
-      [conversationId]
-    );
-    res.json({ messages: result.rows });
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT $2 OFFSET $3`,
+      [conversationId, pageSize, offset]
+      ),
+    ]);
+    result.rows.reverse();
+    res.json({ messages: result.rows, pagination: paginationMeta(page, pageSize, count.rows[0].total) });
   } catch (e) {
     console.error('list messages error', e);
     res.status(500).json({ error: 'Could not load messages.' });

@@ -25,6 +25,9 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+if (env.NODE_ENV === 'production' && env.CORS_ORIGIN === '*') {
+  throw new Error('CORS_ORIGIN must name the frontend origin in production; wildcard origins cannot protect cookies.');
+}
 const config = {
   ...env,
   databaseUrl: env.DATABASE_URL,

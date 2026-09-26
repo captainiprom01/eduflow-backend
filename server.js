@@ -7,6 +7,7 @@ const { initDb, pool } = require('./db');
 const logger = require('./lib/logger');
 const { requestContext } = require('./middleware/requestContext');
 const { notFound, errorHandler } = require('./middleware/errors');
+const { csrfProtection } = require('./middleware/csrf');
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
@@ -31,8 +32,9 @@ const server = http.createServer(app);
 const realtime = attachRealtime(server);
 
 app.use(requestContext);
-app.use(cors({ origin: config.corsOrigins }));
+app.use(cors({ origin: config.corsOrigins, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
+app.use(csrfProtection(config.corsOrigins));
 
 app.get('/', (req, res) => {
   res.json({ ok: true, service: 'EduFlow API' });

@@ -8,6 +8,7 @@ const logger = require('./lib/logger');
 const { requestContext } = require('./middleware/requestContext');
 const { notFound, errorHandler } = require('./middleware/errors');
 const { csrfProtection } = require('./middleware/csrf');
+const helmet = require('helmet');
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
@@ -32,9 +33,11 @@ const server = http.createServer(app);
 const realtime = attachRealtime(server);
 
 app.use(requestContext);
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: config.corsOrigins, credentials: config.corsCredentials }));
 app.use(express.json({ limit: '1mb' }));
 app.use(csrfProtection(config.corsOrigins));
+app.use(generalLimiter);
 
 app.get('/', (req, res) => {
   res.json({ ok: true, service: 'EduFlow API' });
@@ -54,7 +57,6 @@ app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/ready', readinessHandler);
 app.get('/health', readinessHandler);
 
-app.use(generalLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/courses', courseRoutes);

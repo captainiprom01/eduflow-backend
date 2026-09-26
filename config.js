@@ -25,13 +25,16 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
-const corsCredentials = env.CORS_ORIGIN !== '*';
+const configuredOrigins = env.CORS_ORIGIN === '*'
+  ? [env.FRONTEND_URL]
+  : env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+const corsCredentials = configuredOrigins.length > 0;
 const config = {
   ...env,
   databaseUrl: env.DATABASE_URL,
   databasePoolMax: env.DATABASE_POOL_MAX,
   port: env.PORT,
-  corsOrigins: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
+  corsOrigins: configuredOrigins,
   corsCredentials,
 };
 

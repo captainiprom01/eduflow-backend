@@ -27,6 +27,19 @@ test('liveness endpoint does not require database access', async () => {
   assert.deepEqual(response.body, { status: 'ok' });
 });
 
+test('responses include security headers and only allow the configured frontend origin', async () => {
+  const allowed = await request(app).get('/').set('Origin', 'https://example.test');
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers['access-control-allow-origin'], 'https://example.test');
+  assert.equal(allowed.headers['access-control-allow-credentials'], 'true');
+  assert.equal(allowed.headers['x-content-type-options'], 'nosniff');
+  assert.equal(allowed.headers['x-frame-options'], 'SAMEORIGIN');
+
+  const denied = await request(app).get('/').set('Origin', 'https://attacker.example');
+  assert.equal(denied.status, 200);
+  assert.equal(denied.headers['access-control-allow-origin'], undefined);
+});
+
 test('unknown routes return a stable error contract', async () => {
   const response = await request(app).get('/does-not-exist');
   assert.equal(response.status, 404);

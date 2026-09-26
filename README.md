@@ -54,8 +54,8 @@ npm test
 ```
 
 Set `CORS_ORIGIN` to the exact deployed frontend origin for credentialed
-HttpOnly-cookie sessions. A wildcard (`*`) remains supported for the current
-bearer-token deployment, but credentialed cookies are disabled in that mode.
+HttpOnly-cookie sessions. If Render still has `CORS_ORIGIN=*`, the validated
+`FRONTEND_URL` is used as the safe allow-list instead of returning a wildcard.
 
 See [`docs/operations.md`](docs/operations.md) for backup, restore, monitoring,
 scheduled-job, and incident-response procedures.

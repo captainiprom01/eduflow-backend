@@ -1,8 +1,11 @@
 const express = require('express');
+const { z } = require('zod');
 const { requireAuth } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
 
 const router = express.Router();
 router.use(requireAuth);
+const dateQuerySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
 
 const DAILY_QUOTES = [
   'Small steps every day beat big pushes once in a while.',
@@ -26,7 +29,7 @@ function dayNumber(dateString) {
   return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
 }
 
-router.get('/daily', (req, res) => {
+router.get('/daily', validate(dateQuerySchema, 'query'), (req, res) => {
   const date = isValidDateStr(req.query.date)
     ? req.query.date
     : new Date().toISOString().slice(0, 10);

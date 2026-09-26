@@ -7,10 +7,15 @@ const { pool } = require('../db');
 const { requireAuth, SESSION_COOKIE } = require('../middleware/auth');
 const { sendEmail } = require('../lib/email');
 const { authLimiter } = require('../middleware/rateLimit');
+const { validate } = require('../middleware/validate');
+const { z } = require('zod');
 
 const router = express.Router();
 const googleClient = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID) : null;
 const USER_FIELDS = 'id, name, email, school, department, programme, level, (password_hash IS NOT NULL) AS has_password, email_verified';
+const signupSchema = z.object({ name: z.string().trim().min(1).max(160), email: z.string().email().max(320), password: z.string().min(8).max(200) });
+const loginSchema = z.object({ email: z.string().email().max(320), password: z.string().min(1).max(200) });
+const googleSchema = z.object({ credential: z.string().min(1).max(10000) });
 
 function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d', algorithm: 'HS256' });
@@ -50,7 +55,7 @@ async function sendVerificationEmail(userId, toEmail) {
   await sendEmail({ to: toEmail, subject: 'Verify your EduFlow email', html: `<p>Welcome to EduFlow! Please confirm this is your email address.</p><p><a href="${frontendUrl()}?verifyToken=${rawToken}">Click here to verify your email</a>. This link expires in 24 hours.</p>` });
 }
 
-router.post('/signup', authLimiter, async (req, res) => {
+router.post('/signup', authLimiter, validate(signupSchema), async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password are required.' });
@@ -66,7 +71,7 @@ router.post('/signup', authLimiter, async (req, res) => {
   } catch (e) { console.error('signup error', e); res.status(500).json({ error: 'Could not create account.' }); }
 });
 
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
@@ -78,7 +83,7 @@ router.post('/login', authLimiter, async (req, res) => {
   } catch (e) { console.error('login error', e); res.status(500).json({ error: 'Could not log in.' }); }
 });
 
-router.post('/google', authLimiter, async (req, res) => {
+router.post('/google', authLimiter, validate(googleSchema), async (req, res) => {
   try {
     if (!googleClient) return res.status(501).json({ error: 'Google sign-in is not configured on this server yet.' });
     const { credential } = req.body || {};

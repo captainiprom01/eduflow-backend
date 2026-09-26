@@ -2,7 +2,11 @@ require('dotenv').config();
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const { config } = require('./config');
 const { initDb, pool } = require('./db');
+const logger = require('./lib/logger');
+const { requestContext } = require('./middleware/requestContext');
+const { notFound, errorHandler } = require('./middleware/errors');
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
@@ -21,14 +25,14 @@ const quoteRoutes = require('./routes/quotes');
 const { router: announcementRoutes } = require('./routes/announcements');
 const { generalLimiter } = require('./middleware/rateLimit');
 const { attachRealtime } = require('./realtime');
-const app = express();
-const PORT = process.env.PORT || 4000;
-const corsOrigin = process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*' ? process.env.CORS_ORIGIN.split(',') : '*';
-const server = http.createServer(app);
-attachRealtime(server);
 
-app.use(cors({ origin: corsOrigin }));
-app.use(express.json());
+const app = express();
+const server = http.createServer(app);
+const realtime = attachRealtime(server);
+
+app.use(requestContext);
+app.use(cors({ origin: config.corsOrigins }));
+app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {
   res.json({ ok: true, service: 'EduFlow API' });
@@ -39,18 +43,16 @@ async function readinessHandler(req, res) {
     await pool.query('SELECT 1');
     res.json({ status: 'ok' });
   } catch (error) {
-    console.error('health check failed', error);
-    res.status(503).json({ status: 'degraded' });
+    logger.error('health.database_check_failed', { requestId: req.requestId, error: error.message });
+    res.status(503).json({ status: 'degraded', requestId: req.requestId });
   }
 }
 
-// Keep process liveness cheap and separate from database readiness checks.
 app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/ready', readinessHandler);
 app.get('/health', readinessHandler);
 
 app.use(generalLimiter);
-
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/courses', courseRoutes);
@@ -67,11 +69,34 @@ app.use('/api/streak', streakRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/announcements', announcementRoutes);
 
-initDb()
-  .then(() => {
-    server.listen(PORT, () => console.log(`EduFlow API listening on port ${PORT}`));
-  })
-  .catch((e) => {
-    console.error('Failed to initialize database', e);
+app.use(notFound);
+app.use(errorHandler);
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info('process.shutdown_started', { signal });
+  realtime.close();
+  await new Promise((resolve) => server.close(resolve));
+  await pool.end();
+  logger.info('process.shutdown_complete');
+}
+
+async function start() {
+  await initDb();
+  await new Promise((resolve) => server.listen(config.port, resolve));
+  logger.info('server.started', { port: config.port, environment: config.NODE_ENV });
+  return server;
+}
+
+if (require.main === module) {
+  process.once('SIGTERM', () => shutdown('SIGTERM').then(() => process.exit(0)));
+  process.once('SIGINT', () => shutdown('SIGINT').then(() => process.exit(0)));
+  start().catch((error) => {
+    logger.error('server.start_failed', { error: error.message, stack: error.stack });
     process.exit(1);
   });
+}
+
+module.exports = { app, server, start, shutdown };

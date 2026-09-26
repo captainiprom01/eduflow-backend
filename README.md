@@ -10,8 +10,12 @@ never receives the formula, only the finished numbers.
 ```
 backend/
   server.js            entry point, wires up routes
-  db.js                Postgres pool + table creation
+  config.js            validated environment configuration
+  db.js                Postgres pool + connectivity check
+  migrations/          versioned database schema changes
+  tools/migrate.js     migration runner
   middleware/auth.js   JWT verification
+  middleware/errors.js centralized error responses
   routes/
     auth.js            signup, login, /me
     courses.js
@@ -23,8 +27,9 @@ backend/
     progress.js         <- completion % logic lives here
 ```
 
-Tables are created automatically on first startup (`db.js` runs
-`CREATE TABLE IF NOT EXISTS ...`), so there's no separate migration step.
+Database schema changes are versioned in `migrations/` and must be applied
+before starting the API with `npm run migrate`. Normal server startup only
+checks database connectivity.
 
 ## 1. Local setup
 
@@ -34,12 +39,19 @@ Requirements: Node 18+, a Postgres database (see step 2 for a free one).
 cd backend
 npm install
 cp .env.example .env
-# edit .env: paste your DATABASE_URL and a random JWT_SECRET
+npm run migrate
 npm run dev
 ```
 
 The API starts on `http://localhost:4000` (or whatever `PORT` you set).
 Visit `http://localhost:4000/` — you should see `{"ok":true,...}`.
+
+The health endpoints are `/health/live` for process liveness and
+`/health/ready` for database readiness. Run the complete local checks with:
+
+```bash
+npm test
+```
 
 Generate a JWT secret quickly with:
 ```bash
